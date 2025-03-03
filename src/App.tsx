@@ -6,28 +6,54 @@ const client = generateClient<Schema>();
 
 function App() {
   const [todos, setTodos] = useState<Array<Schema["Todo"]["type"]>>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    client.models.Todo.observeQuery().subscribe({
-      next: (data) => setTodos([...data.items]),
+    const subscription = client.models.Todo.observeQuery().subscribe({
+      next: (data) => {
+        setTodos([...data.items]);
+        setIsLoading(false);
+      },
+      error: (err) => {
+        console.error("Error fetching todos:", err);
+        setError("Failed to load todos. Please check your connection.");
+        setIsLoading(false);
+      }
     });
+    
+    // Clean up subscription on unmount
+    return () => subscription.unsubscribe();
   }, []);
 
   function createTodo() {
-    client.models.Todo.create({ content: window.prompt("Todo content") });
+    const content = window.prompt("Todo content");
+    if (content) {
+      client.models.Todo.create({ content })
+        .catch(err => console.error("Error creating todo:", err));
+    }
   }
 
   function deleteTodo(id: string) {
     client.models.Todo.delete({ id })
+      .catch(err => console.error("Error deleting todo:", err));
   }
+
+  if (error) return <div>Error: {error}</div>;
+  if (isLoading) return <div>Loading...</div>;
 
   return (
     <main>
-      <h1>My todo Lits</h1>
+      <h1>My Todo List</h1>
       <button onClick={createTodo}>+ new</button>
       <ul>
         {todos.map((todo) => (
-          <li key={todo.id}>{todo.content}</li>
+          <li key={todo.id}>
+            {todo.content}
+            <button onClick={() => deleteTodo(todo.id)} style={{ marginLeft: '10px' }}>
+              Delete
+            </button>
+          </li>
         ))}
       </ul>
       <div>
